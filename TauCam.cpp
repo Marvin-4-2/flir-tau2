@@ -2,12 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TAU_CMD_PALETTE         0x10
-#define TAU_CMD_ZOOM            0x0F
-#define TAU_CMD_SPOTMETER       0x1F
-#define TAU_CMD_ORIENTATION     0x11
-#define TAU_CMD_SYMBOL          0x2F
-#define TAU_CMD_VIDEO_STANDART  0x72
 
 // IMPORTANT: little endian to big endian converting in argument bytes
 

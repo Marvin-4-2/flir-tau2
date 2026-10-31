@@ -1,6 +1,16 @@
 #pragma once
 #include "TauCamBase.h"
 
+// TAU 2 Commands
+#define TAU_CMD_DO_FFC          0x0C
+#define TAU_CMD_PALETTE         0x10
+#define TAU_CMD_ZOOM            0x0F
+#define TAU_CMD_SPOTMETER       0x1F
+#define TAU_CMD_ORIENTATION     0x11
+#define TAU_CMD_SYMBOL          0x2F
+#define TAU_CMD_VIDEO_STANDART  0x72
+
+// TAU 2 Command Parameters
 #define TAU_ZOOM_1X         0b00000
 #define TAU_ZOOM_2X         0b00100
 #define TAU_ZOOM_4X         0b01000

@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <cstddef>
 
 #define LSB(X) X & 0xFF
 #define MSB(X) X >> 8
