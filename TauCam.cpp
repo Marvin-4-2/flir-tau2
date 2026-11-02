@@ -31,6 +31,27 @@ uint8_t TauCam::getSerialNumbers(uint32_t &cameraSerial, uint32_t &sensorSerial)
     return TAU_OK;
 }
 
+
+
+static bool isPal(TauVideoStandard standard) {
+    return standard == TauVideoStandard::Pal25 || standard == TauVideoStandard::Pal50;
+}
+
+// Switching between PAL and NTSC requires a FFC afterwards
+uint8_t TauCam::setVideoStandard(TauVideoStandard standard) {
+    TauVideoStandard current;
+    uint8_t status = TauCam::get(TauCmd::VideoStandard, current);
+    if (status != TAU_OK) return status;
+
+    status = TauCam::set(TauCmd::VideoStandard, standard);
+    if (status != TAU_OK) return status;
+
+    if (isPal(current) != isPal(standard)) {
+        return TauCam::execute(TauCmd::DoFfc);
+    }
+    return TAU_OK;
+}
+
 uint8_t TauCam::printText(
     uint16_t symbolNum,
     const char *text,

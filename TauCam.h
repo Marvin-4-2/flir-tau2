@@ -111,13 +111,14 @@ public:
     }
 
     // Get a value selected by a 2 byte argument, e.g. get(TauCmd::ReadSensor, TauSensorReading::FpaTempC10, temp)
+    // Commands with 4 get argument bytes send the selector followed by 2 don't care bytes
     template <typename T, typename S>
     uint8_t get(const TauCommand<T> &cmd, S selector, T &value) {
-        if (cmd.getArgBytes != 2 || cmd.getReplyBytes != 2) return TAU_RES_ERR_UNSUPPORTED;
+        if ((cmd.getArgBytes != 2 && cmd.getArgBytes != 4) || cmd.getReplyBytes != 2) return TAU_RES_ERR_UNSUPPORTED;
         uint16_t rawSelector = static_cast<uint16_t>(selector);
-        uint8_t args[2] = {static_cast<uint8_t>(rawSelector >> 8), static_cast<uint8_t>(rawSelector & 0xFF)};
+        uint8_t args[4] = {static_cast<uint8_t>(rawSelector >> 8), static_cast<uint8_t>(rawSelector & 0xFF), 0, 0};
         uint8_t reply[2];
-        uint8_t status = exchange(cmd.code, args, sizeof(args), reply, sizeof(reply), cmd.getReplyBytes);
+        uint8_t status = exchange(cmd.code, args, cmd.getArgBytes, reply, sizeof(reply), cmd.getReplyBytes);
         if (status != TAU_OK) return status;
         value = static_cast<T>((static_cast<uint16_t>(reply[0]) << 8) | reply[1]);
         return TAU_OK;
@@ -131,6 +132,9 @@ public:
     }
 
     uint8_t getSerialNumbers(uint32_t &cameraSerial, uint32_t &sensorSerial);
+
+    // Use instead of set(TauCmd::VideoStandard, ...), does a FFC when switching between PAL and NTSC
+    uint8_t setVideoStandard(TauVideoStandard standard);
 
     // text is limited to TAU_SYMBOL_MAX_TEXT_LEN characters
     uint8_t printText(

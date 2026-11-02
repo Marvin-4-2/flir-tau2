@@ -51,6 +51,9 @@ First you have to declare callback function to read(), write(), available() acco
     uint32_t cameraSerial, sensorSerial;
     cam.getSerialNumbers(cameraSerial, sensorSerial);
 
+    // does a FFC when switching between PAL and NTSC
+    cam.setVideoStandard(TauVideoStandard::Pal50);
+
     // OSD drawing methods
     cam.printText(...)
     cam.drawRectangle(...)

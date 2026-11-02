@@ -9,6 +9,7 @@
 
 // TAU Success/Error codes
 #define TAU_OK                          0x00
+#define TAU_NOT_READY                   0x02
 #define TAU_RANGE_ERROR                 0x03
 #define TAU_CHECKSUM_ERROR              0x04
 #define TAU_UNDEFINED_PROCESS_ERROR     0x05
