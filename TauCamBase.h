@@ -19,8 +19,10 @@
 
 // Lib custom Error codes
 #define TAU_RES_ERR_LEN                 0xF1
-#define TAU_RES_ERR_INVALID             0xF1
+#define TAU_RES_ERR_INVALID             0xF2
 #define TAU_RES_ERR_CRC                 0xF3
+#define TAU_RES_ERR_BUFFER              0xF4
+#define TAU_RES_ERR_UNSUPPORTED         0xF5
 #define TAU_RES_ERR_UDEFINED            0xFF
 
 
@@ -38,9 +40,16 @@ private:
     uint32_t available();
     uint32_t read();
     void write(const void *pBuf, uint32_t len);
+    uint8_t readResponse(void *pResponseData, uint16_t responseDataCapacity, uint16_t *pResponseDataLen);
 protected:
-    uint8_t sendCommand(uint8_t cmd, const void *pArgs = NULL, uint16_t argsLen = 0);
-    uint8_t readResponse();
+    uint8_t sendCommand(
+        uint8_t cmd,
+        const void *pArgs = NULL,
+        uint16_t argsLen = 0,
+        void *pResponseData = NULL,
+        uint16_t responseDataCapacity = 0,
+        uint16_t *pResponseDataLen = NULL
+    );
 public:
     TauCamBase(
         void (*writeByte)(uint8_t),

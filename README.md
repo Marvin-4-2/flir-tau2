@@ -33,18 +33,54 @@ First you have to declare callback function to read(), write(), available() acco
 ```cpp
     TauCam cam = TauCam(write, read, available, delay); // read the section above
 
-    // cam setup methods
-    cam.setPalette(...)
-    cam.setZoom(...)
-    cam.setSpotMeter(...)
-    cam.setOrientation(...)
-    cam.setVideoStandart(...)
+    // commands from the TauCmd table in TauCommands.h
+    cam.execute(TauCmd::DoFfc);
+    cam.set(TauCmd::VideoPalette, TauPalette::BlackHot);
+    cam.set(TauCmd::Contrast, 100);
+    cam.set(TauCmd::VideoMode, TauVideoMode::Zoom2x);
+
+    TauOrientation orientation;
+    cam.get(TauCmd::VideoOrientation, orientation);
+
+    int16_t fpaTemp;
+    cam.get(TauCmd::ReadSensor, TauSensorReading::FpaTempC10, fpaTemp);
+
+    uint8_t part[TauCmd::CameraPart.getReplyBytes];
+    cam.getBytes(TauCmd::CameraPart, part, sizeof(part));
+
+    uint32_t cameraSerial, sensorSerial;
+    cam.getSerialNumbers(cameraSerial, sensorSerial);
 
     // OSD drawing methods
     cam.printText(...)
     cam.drawRectangle(...)
-    cam.sendCommand(...)
+    cam.drawOutlineRectangle(...)
 
     // send raw custom command
     cam.sendCommand(...)
 ```
+
+All of these return the camera status code or a `TAU_RES_ERR_*` code, with
+`TAU_OK` on success. A parameter from another command does not compile, and an
+operation the command does not have returns `TAU_RES_ERR_UNSUPPORTED` without
+sending anything.
+
+`sendCommand` takes any function code. Commands that return data can provide a
+response buffer and receive the decoded payload length:
+
+```cpp
+    uint8_t response[16];
+    uint16_t responseLen = 0;
+    uint8_t status = cam.sendCommand(
+        TauCmd::GetRevision.code,
+        NULL,
+        0,
+        response,
+        sizeof(response),
+        &responseLen
+    );
+```
+
+The response payload is copied only after the frame length and checksums have
+been validated. If the payload does not fit, `sendCommand` returns
+`TAU_RES_ERR_BUFFER` and reports the required length in `responseLen`.

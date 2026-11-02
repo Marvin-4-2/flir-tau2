@@ -1,52 +1,53 @@
 #include "TauCam.h"
-#include <stdlib.h>
 #include <string.h>
 
 
 // IMPORTANT: little endian to big endian converting in argument bytes
 
-void TauCam::setPalette(uint8_t paletteNum) {
-    // palette num in 0-29 range
-    uint8_t args[2] = {0, paletteNum};
-    TauCam::sendCommand(TAU_CMD_VIDEO_PALETTE, &args, sizeof(args));
+// Send command and check the status and the reply length from the command table
+uint8_t TauCam::exchange(
+    uint8_t cmd,
+    const void *pArgs,
+    uint16_t argsLen,
+    void *pReply,
+    uint16_t replyCapacity,
+    uint16_t expectedReplyLen
+) {
+    uint16_t replyLen = 0;
+    uint8_t status = TauCam::sendCommand(cmd, pArgs, argsLen, pReply, replyCapacity, &replyLen);
+    if (status != TAU_OK) return status;
+    if (expectedReplyLen != TauCmd::VAR && replyLen != expectedReplyLen) return TAU_RES_ERR_LEN;
+    return TAU_OK;
 }
 
-void TauCam::setZoom(uint8_t zoomMode) {
-    uint8_t args[2] = {0, zoomMode};
-    TauCam::sendCommand(TAU_CMD_VIDEO_MODE, &args, sizeof(args));
+uint8_t TauCam::getSerialNumbers(uint32_t &cameraSerial, uint32_t &sensorSerial) {
+    uint8_t reply[TauCmd::SerialNumber.getReplyBytes];
+    uint8_t status = TauCam::getBytes(TauCmd::SerialNumber, reply, sizeof(reply));
+    if (status != TAU_OK) return status;
+    cameraSerial = (static_cast<uint32_t>(reply[0]) << 24) | (static_cast<uint32_t>(reply[1]) << 16) |
+                   (static_cast<uint32_t>(reply[2]) << 8) | reply[3];
+    sensorSerial = (static_cast<uint32_t>(reply[4]) << 24) | (static_cast<uint32_t>(reply[5]) << 16) |
+                   (static_cast<uint32_t>(reply[6]) << 8) | reply[7];
+    return TAU_OK;
 }
 
-void TauCam::setSpotMeter(uint8_t mode) {
-    uint8_t args[2] = {0, mode};
-    TauCam::sendCommand(TAU_CMD_SPOT_METER_MODE, &args, sizeof(args));
-}
-
-void TauCam::setOrientation(uint8_t orientMode) {
-    uint8_t args[2] = {0, orientMode};
-    TauCam::sendCommand(TAU_CMD_VIDEO_ORIENTATION, &args, sizeof(args));
-}
-
-void TauCam::setVideoStandart(uint8_t standart) {
-    uint8_t args[2] = {0, standart};
-    TauCam::sendCommand(TAU_CMD_VIDEO_STANDARD, &args, sizeof(args));
-    TauCam::sendCommand(TAU_CMD_DO_FFC, NULL, 0);
-}
-
-void TauCam::printText(
+uint8_t TauCam::printText(
     uint16_t symbolNum,
     const char *text,
     uint16_t posX,
     uint16_t posY,
     uint8_t colorBgrnd,
-    uint8_t colorFrgrnd, 
+    uint8_t colorFrgrnd,
     uint16_t aligment,
     uint16_t font
 ){
-    uint8_t textLen = strlen(text);
-    uint8_t argsLen = 14 + (textLen % 2 ? textLen + 1 : textLen) ;
-    uint8_t *args = (uint8_t *) calloc(argsLen, 1);
+    size_t textLen = strlen(text);
+    if (textLen > TAU_SYMBOL_MAX_TEXT_LEN) return TAU_RES_ERR_LEN;
 
-    uint16_t type = TAU_SYMBOL_TEXT;
+    uint16_t argsLen = TAU_SYMBOL_HEADER_LEN + (textLen % 2 ? textLen + 1 : textLen);
+    uint8_t args[TAU_SYMBOL_MAX_ARGS] = {0};
+
+    uint16_t type = static_cast<uint16_t>(TauSymbolType::Text);
 
     args[0] = MSB(symbolNum); args[1] = LSB(symbolNum);             // Bytes 0-1: Symbol Number (0-99)
     args[2] = MSB(type); args[3] = LSB(type);           // Bytes 2-3: Symbol Type (Rectangle=1, Text=2, Bitmap=3)
@@ -56,38 +57,36 @@ void TauCam::printText(
     args[10] = MSB(font); args[11] = LSB(font);         // Bytes 10-11: Height (rectangle) or  Font (text)
     args[12] = colorBgrnd; args[13] = colorFrgrnd;      // Bytes 12-13: Background Color and Foreground Color
 
-    memcpy(args+14, text, textLen);    
-    TauCam::sendCommand(TAU_CMD_SYMBOL_CONTROL, args, argsLen);
-    free(args);
+    memcpy(args + TAU_SYMBOL_HEADER_LEN, text, textLen);
+    return TauCam::exchange(TauCmd::SymbolDraw.code, args, argsLen, NULL, 0, TauCmd::SymbolDraw.setReplyBytes);
 };
 
 // canvas width = 640, height 512
 
-void TauCam::drawRect(
+uint8_t TauCam::drawRect(
 uint16_t symbolNum,
-    uint16_t type,
+    TauSymbolType type,
     uint16_t posX,
     uint16_t posY,
     uint16_t width,
     uint16_t height,
     uint8_t color
 ){
-    uint8_t argsLen = 14;
-    uint8_t *args = (uint8_t *) calloc(argsLen, 1);
+    uint8_t args[TAU_SYMBOL_HEADER_LEN];
+    uint16_t rawType = static_cast<uint16_t>(type);
 
     args[0] = MSB(symbolNum); args[1] = LSB(symbolNum);             // Bytes 0-1: Symbol Number (0-99)
-    args[2] = MSB(type); args[3] = LSB(type);           // Bytes 2-3: Symbol Type (Rectangle=1, Text=2, Bitmap=3)
+    args[2] = MSB(rawType); args[3] = LSB(rawType);     // Bytes 2-3: Symbol Type (Rectangle=1, Text=2, Bitmap=3)
     args[4] = MSB(posX); args[5] = LSB(posX);           // Bytes 4-5: X-coord
     args[6] = MSB(posY); args[7] = LSB(posY);           // Bytes 6-7: Y-coord
     args[8] = MSB(width); args[9] = LSB(width);         // Bytes 8-9: Width (rectangle) or Alignment (text)
     args[10] = MSB(height); args[11] = LSB(height);     // Bytes 10-11: Height (rectangle) or  Font (text)
     args[12] = TAU_COLOR_TRANSPRNT; args[13] = color;   // Bytes 12-13: Background Color and Foreground Color
 
-    TauCam::sendCommand(TAU_CMD_SYMBOL_CONTROL, args, argsLen);
-    free(args);
+    return TauCam::exchange(TauCmd::SymbolDraw.code, args, sizeof(args), NULL, 0, TauCmd::SymbolDraw.setReplyBytes);
 };
 
-void TauCam::drawRectangle(
+uint8_t TauCam::drawRectangle(
 uint16_t symbolNum,
     uint16_t posX,
     uint16_t posY,
@@ -95,10 +94,10 @@ uint16_t symbolNum,
     uint16_t height,
     uint8_t color
 ){
-    TauCam::drawRect(symbolNum, TAU_SYMBOL_RECTANGLE, posX, posY, width, height, color);
+    return TauCam::drawRect(symbolNum, TauSymbolType::Rectangle, posX, posY, width, height, color);
 }
 
-void TauCam::drawOutlineRectangle(
+uint8_t TauCam::drawOutlineRectangle(
     uint16_t symbolNum,
     uint16_t posX,
     uint16_t posY,
@@ -106,5 +105,5 @@ void TauCam::drawOutlineRectangle(
     uint16_t height,
     uint8_t color
 ){
-    TauCam::drawRect(symbolNum, TAU_SYMBOL_OUTLINE_RECT, posX, posY, width, height, color);
+    return TauCam::drawRect(symbolNum, TauSymbolType::OutlineRectangle, posX, posY, width, height, color);
 }

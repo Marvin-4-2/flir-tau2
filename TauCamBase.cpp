@@ -6,12 +6,12 @@
 
 // debug print hex buffer to console
 void printHexBuf(const char *title, const void *pBuf, uint32_t len) {
-    // printf("%s\n", title);
-    // for (uint32_t i = 0; i < len; i++) {
-    //     uint8_t byte = *((uint8_t*)pBuf+i);
-    //     printf("0x%02X ", byte);
-    // }
-    // printf("\n\n");
+     //printf("%s\n", title);
+     //for (uint32_t i = 0; i < len; i++) {
+     //    uint8_t byte = *((uint8_t*)pBuf+i);
+     //    printf("0x%02X ", byte);
+     //}
+     //printf("\n\n");
 }
 
 TauCamBase::TauCamBase(
@@ -67,7 +67,14 @@ uint16_t TauCamBase::crc16(uint8_t *pBlock, uint16_t len) {
 }
 
 // Build package structure and write to camera
-uint8_t TauCamBase::sendCommand(uint8_t cmd, const void *pArgs, uint16_t argsLen) {
+uint8_t TauCamBase::sendCommand(
+    uint8_t cmd,
+    const void *pArgs,
+    uint16_t argsLen,
+    void *pResponseData,
+    uint16_t responseDataCapacity,
+    uint16_t *pResponseDataLen
+) {
 
     // allocate memory size = (header = 8b) + (arguments = Nb) + (CRC2 = 2b)
     uint16_t packLen = 8 + argsLen + 2;
@@ -100,19 +107,55 @@ uint8_t TauCamBase::sendCommand(uint8_t cmd, const void *pArgs, uint16_t argsLen
     TauCamBase::serialDelay(50);
 
     // read response and return status code 
-    return TauCamBase::readResponse();
+    return TauCamBase::readResponse(pResponseData, responseDataCapacity, pResponseDataLen);
 };
 
 
 // Read and parse response
-uint8_t TauCamBase::readResponse() {
+uint8_t TauCamBase::readResponse(
+    void *pResponseData,
+    uint16_t responseDataCapacity,
+    uint16_t *pResponseDataLen
+) {
+    if (pResponseDataLen != NULL) {
+        *pResponseDataLen = 0;
+    }
+
     uint32_t len = TauCamBase::read();
     uint8_t *pBuf = TauCamBase::buffer;
     
-    // check len and first byte code
+    // Validate the fixed response header before reading its declared payload length.
     if (len == 0 || len < 8) return TAU_RES_ERR_LEN;
     if (pBuf[0] != 0x6E) return TAU_RES_ERR_INVALID;
 
-    // return response status byte
+    uint16_t expectedHeaderCrc = TauCamBase::crc16(pBuf, 6);
+    uint16_t receivedHeaderCrc = (static_cast<uint16_t>(pBuf[6]) << 8) | pBuf[7];
+    if (expectedHeaderCrc != receivedHeaderCrc) return TAU_RES_ERR_CRC;
+
+    uint16_t responseDataLen = (static_cast<uint16_t>(pBuf[4]) << 8) | pBuf[5];
+    uint32_t expectedLen = 8 + responseDataLen;
+    if (responseDataLen != 0 || len > 8) {
+        expectedLen += 2;
+    }
+    if (len != expectedLen) return TAU_RES_ERR_LEN;
+
+    if (expectedLen > 8) {
+        uint16_t expectedDataCrc = TauCamBase::crc16(pBuf, static_cast<uint16_t>(expectedLen - 2));
+        uint16_t receivedDataCrc = (static_cast<uint16_t>(pBuf[expectedLen - 2]) << 8) |
+                                   pBuf[expectedLen - 1];
+        if (expectedDataCrc != receivedDataCrc) return TAU_RES_ERR_CRC;
+    }
+
+    if (pResponseDataLen != NULL) {
+        *pResponseDataLen = responseDataLen;
+    }
+
+    if (pResponseData != NULL) {
+        if (responseDataCapacity < responseDataLen) return TAU_RES_ERR_BUFFER;
+        if (responseDataLen != 0) {
+            memcpy(pResponseData, pBuf + 8, responseDataLen);
+        }
+    }
+
     return pBuf[1];
 }
